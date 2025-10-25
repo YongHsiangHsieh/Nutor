@@ -1,0 +1,43 @@
+# Byte-compiled / cache / temp files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# VS Code settings
+.vscode/
+
+# Python environment
+*.env
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Local data and vector store
+chroma-index/
+*.db
+*.sqlite3
+
+# dotenv environment files
+.env
+.env.*
+
+# Other potentially sensitive or large user data
+*.log
+cache/
+*.bak
+
+# PDF files
+*.pdf
+
+
