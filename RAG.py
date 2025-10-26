@@ -22,7 +22,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- LangChain core bits
-from langchain_community.document_loaders import PyPDFLoader
+import re
+from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
@@ -37,6 +38,56 @@ from langchain_chroma import Chroma
 from tenacity import retry, stop_after_attempt, wait_exponential
 from tqdm import tqdm
 
+# --- OCR / layout cleanup helpers (run BEFORE chunking/embedding) ---
+_LIGATURES = {
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "ﬀ": "ff",
+    "ﬅ": "ft",
+    "ﬆ": "st",
+}
+
+def normalize_ligatures(text: str) -> str:
+    for bad, good in _LIGATURES.items():
+        text = text.replace(bad, good)
+    return text
+
+def clean_ocr_artifacts(raw: str) -> str:
+    """
+    Heuristic cleanup for common PDF/OCR issues:
+    - de-hyphenate across line breaks: 'W ater-\nSoluble' -> 'WaterSoluble'
+    - fix intra-word random spaces: 'o f' -> 'of', 'W ater' -> 'Water'
+    - collapse excessive whitespace
+    - normalize ligatures (ﬁ -> fi, etc.)
+    """
+    if not raw:
+        return raw
+
+    text = normalize_ligatures(raw)
+
+    # 1) join hyphenated line-breaks: word-\nword -> wordword
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+
+    # 2) convert hard newlines to spaces to reduce layout breaks
+    #    (keep paragraph intent: double newlines -> single newline)
+    text = text.replace("\r", "")
+    text = re.sub(r"\n{2,}", "\n", text)   # squeeze multiple newlines
+    text = text.replace("\n", " ")
+
+    # 3) remove intra-word single-letter spacing (common OCR artifact)
+    #    e.g., 'o f' -> 'of', 'W ater' -> 'Water'
+    text = re.sub(r"(?<=\b\w)\s+(?=\w\b)", "", text)
+
+    # 4) collapse multiple spaces
+    text = re.sub(r"\s+", " ", text)
+
+    # 5) minor known patterns (safe)
+    text = text.replace(" o f ", " of ")
+
+    return text.strip()
+
 
 def sha1(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
@@ -50,8 +101,19 @@ def chunk_documents(
     """
     Loads a PDF lazily and returns chunked Documents with useful metadata.
     """
-    loader = PyPDFLoader(pdf_path)  # streams pages
+    loader = PyMuPDFLoader(pdf_path)  # layout-aware, robust text extraction
     pages = loader.load()
+
+    # Clean OCR/layout artifacts on each page BEFORE splitting
+    cleaned_pages: List[Document] = []
+    for d in pages:
+        cleaned_pages.append(
+            Document(
+                page_content=clean_ocr_artifacts(d.page_content),
+                metadata=d.metadata,
+            )
+        )
+    pages = cleaned_pages
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
