@@ -830,34 +830,35 @@ graph = main_builder.compile(checkpointer=checkpointer)
 logger.info("Main graph compiled successfully!")
 
 
-#  write this to a file
-logger.info("Generating graph visualization...")
-with open("graph.png", "wb") as f:
-    f.write(graph.get_graph(xray=1).draw_mermaid_png())
-logger.info("Graph visualization saved to graph.png")
+if __name__ == '__main__':
+    #  write this to a file
+    logger.info("Generating graph visualization...")
+    with open("graph.png", "wb") as f:
+        f.write(graph.get_graph(xray=1).draw_mermaid_png())
+    logger.info("Graph visualization saved to graph.png")
 
 
-logger.info("\n" + "="*60)
-logger.info("STARTING GRAPH EXECUTION")
-logger.info("="*60)
-question = "Describe the absorption pathway of vitamin B12 from mouth to ileum, including intrinsic factor, the site of uptake, and one clinical consequence of pernicious anemia."
-logger.info(f"Input question: {question}")
-logger.info("Invoking graph with question...")
+    logger.info("\n" + "="*60)
+    logger.info("STARTING GRAPH EXECUTION")
+    logger.info("="*60)
+    question = "Describe the absorption pathway of vitamin B12 from mouth to ileum, including intrinsic factor, the site of uptake, and one clinical consequence of pernicious anemia."
+    logger.info(f"Input question: {question}")
+    logger.info("Invoking graph with question...")
 
-# Unique thread for this run so checkpoints are isolated
-thread_id = f"run-{uuid.uuid4().hex}"
-logger.info(f"Thread ID for this run: {thread_id}")
-final_state = graph.invoke(
-    {"question": question, "f": 3},
-    config={"configurable": {"thread_id": thread_id}}
-)
+    # Unique thread for this run so checkpoints are isolated
+    thread_id = f"run-{uuid.uuid4().hex}"
+    logger.info(f"Thread ID for this run: {thread_id}")
+    final_state = graph.invoke(
+        {"question": question, "f": 3},
+        config={"configurable": {"thread_id": thread_id}}
+    )
 
-logger.info("="*60)
-logger.info("GRAPH EXECUTION COMPLETED")
-logger.info(f"Final state: {truncate_log_content(final_state)}")
-logger.info("="*60)
+    logger.info("="*60)
+    logger.info("GRAPH EXECUTION COMPLETED")
+    logger.info(f"Final state: {truncate_log_content(final_state)}")
+    logger.info("="*60)
 
-logger.info(f"\nFINAL ANSWER: {truncate_log_content(final_state['answer'])}")
-print("\n" + "="*60)
-print(f"ANSWER: {final_state['answer']}")
-print("="*60)
+    logger.info(f"\nFINAL ANSWER: {truncate_log_content(final_state['answer'])}")
+    print("\n" + "="*60)
+    print(f"ANSWER: {final_state['answer']}")
+    print("="*60)

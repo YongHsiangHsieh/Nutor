@@ -28,3 +28,6 @@ tenacity>=8.4.1
 
 # Web helpers used by main graph
 wikipedia==1.4.0
+
+# Flask web server
+Flask>=3.0.0
