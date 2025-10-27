@@ -1,6 +1,7 @@
 from langchain_core.documents.base import Document
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Send
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -15,6 +16,7 @@ from langchain_community.document_loaders import WikipediaLoader
 from dotenv import load_dotenv
 import os
 import logging
+import uuid
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 # Reranker
@@ -795,7 +797,12 @@ rag_builder.add_edge("rag_agent_check", "agent_gate")
 rag_builder.add_edge("agent_gate", "rag_fuse_prune")
 rag_builder.add_edge("rag_fuse_prune", "format_rag_results")
 rag_builder.add_edge("format_rag_results", END)
+rag_graph = rag_builder.compile()
+# Mermaid PNG
+with open("rag_graph.png", "wb") as f:
+    f.write(rag_graph.get_graph().draw_mermaid_png())
 logger.info("RAG sub-graph built successfully")
+
 
 # Build main graph
 logger.info("Building main graph...")
@@ -805,7 +812,7 @@ main_builder.add_node("check_question", check_question)
 logger.info("Compiling and adding search sub-graph as node...")
 main_builder.add_node("search", search_builder.compile())
 logger.info("Compiling and adding RAG sub-graph as node...")
-main_builder.add_node("rag", rag_builder.compile())
+main_builder.add_node("rag", rag_graph)
 main_builder.add_node("generate_answer", generate_answer)
 
 logger.info("Adding edges to main graph...")
@@ -817,7 +824,9 @@ main_builder.add_edge("rag", "generate_answer")
 main_builder.add_edge("generate_answer", END)
 
 logger.info("Compiling main graph...")
-graph = main_builder.compile()
+# In-memory checkpointer (per-process). For persistence across restarts, switch to SqliteSaver.
+checkpointer = MemorySaver()
+graph = main_builder.compile(checkpointer=checkpointer)
 logger.info("Main graph compiled successfully!")
 
 
@@ -831,11 +840,17 @@ logger.info("Graph visualization saved to graph.png")
 logger.info("\n" + "="*60)
 logger.info("STARTING GRAPH EXECUTION")
 logger.info("="*60)
-question = "On what page is Figure 9.2 ‘Absorption of Fat-Soluble and Water-Soluble Vitamins’ located, and what is the exact caption text beneath it?"
+question = "Describe the absorption pathway of vitamin B12 from mouth to ileum, including intrinsic factor, the site of uptake, and one clinical consequence of pernicious anemia."
 logger.info(f"Input question: {question}")
 logger.info("Invoking graph with question...")
 
-final_state = graph.invoke({"question": question, "f": 3})
+# Unique thread for this run so checkpoints are isolated
+thread_id = f"run-{uuid.uuid4().hex}"
+logger.info(f"Thread ID for this run: {thread_id}")
+final_state = graph.invoke(
+    {"question": question, "f": 3},
+    config={"configurable": {"thread_id": thread_id}}
+)
 
 logger.info("="*60)
 logger.info("GRAPH EXECUTION COMPLETED")
