@@ -33,6 +33,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def truncate_log_content(content, max_words=10):
+    """Helper function to truncate long content in logs to avoid overwhelming output."""
+    if not content:
+        return str(content)
+    
+    content_str = str(content)
+    words = content_str.split()
+    if len(words) <= max_words:
+        return content_str
+    
+    truncated_words = words[:max_words]
+    return ' '.join(truncated_words) + '...'
+
 # Load env FIRST before initializing any tools that need API keys
 logger.info("Loading environment variables...")
 load_dotenv()
@@ -66,7 +79,7 @@ def check_question(state: OverallState):
     
     logger.info("="*50)
     logger.info("ENTERING check_question function")
-    logger.info(f"State received: {state}")
+    logger.info(f"State received: {truncate_log_content(state)}")
     
     # Check question
     logger.info("Creating structured LLM with CheckQuestion schema...")
@@ -78,7 +91,7 @@ def check_question(state: OverallState):
     
     logger.info(f"Question relevance result: {is_relevant.is_relevant}")
     result = {"is_relevant": is_relevant.is_relevant}
-    logger.info(f"EXITING check_question with result: {result}")
+    logger.info(f"EXITING check_question with result: {truncate_log_content(result)}")
     logger.info("="*50)
     
     return result
@@ -105,7 +118,7 @@ def search_web(state: SearchState):
     
     logger.info("="*50)
     logger.info("ENTERING search_web function")
-    logger.info(f"State received: {state}")
+    logger.info(f"State received: {truncate_log_content(state)}")
 
     # Search query
     logger.info("Creating structured LLM with SearchQuery schema...")
@@ -120,7 +133,7 @@ def search_web(state: SearchState):
     logger.info(f"Performing Tavily web search for: {search_query.search_query}")
     search_result = tavily_search.invoke(search_query.search_query)
     logger.info(f"Tavily search completed. Result type: {type(search_result)}")
-    logger.info(f"Search result preview: {str(search_result)[:200]}...")
+    logger.info(f"Search result preview: {truncate_log_content(search_result)}")
     
      # Format
     logger.info("Formatting web search results...")
@@ -162,7 +175,7 @@ def search_wikipedia(state: SearchState):
     
     logger.info("="*50)
     logger.info("ENTERING search_wikipedia function")
-    logger.info(f"State received: {state}")
+    logger.info(f"State received: {truncate_log_content(state)}")
     question = state["question"]
     logger.info(f"Question: {question}")
     # Search query
@@ -192,7 +205,7 @@ def search_wikipedia(state: SearchState):
             for doc in search_docs
         ]
     )
-    logger.info(f"Formatted Wikipedia results (length: {len(formatted_search_docs)} chars)")
+    logger.info(f"Formatted Wikipedia results (length: {len(formatted_search_docs)} chars): {truncate_log_content(formatted_search_docs)}")
     
     result = {"web_search_results": [formatted_search_docs]}
     logger.info(f"EXITING search_wikipedia with {len(result['web_search_results'])} result(s)")
@@ -224,7 +237,7 @@ def rag_retrieval(state: RAGState):
     """Retrieve top-k candidate chunks from a persisted Chroma collection using the same embedding model as ingestion."""
     logger.info("=" * 50)
     logger.info("ENTERING rag_retrieval function")
-    logger.info(f"State received: {state}")
+    logger.info(f"State received: {truncate_log_content(state)}")
 
     question = state["question"]
     k = state.get("k", 30)  # default recall size
@@ -687,8 +700,8 @@ def format_rag_results(state: RAGState):
             "rerank_score": float(score) if isinstance(score, (int, float)) else None,
         })
 
-        # Optional small log preview (also not truncated, but clipped in logs by slicing, not altering data)
-        logger.info(f"RAG line preview: {line[:300]}{'…' if len(line) > 300 else ''}")
+        # Optional small log preview (truncated to avoid overwhelming logs)
+        logger.info(f"RAG line preview: {truncate_log_content(line)}")
 
     logger.info(f"Formatted {len(results)} RAG result lines (cleaned, no truncation)")
     logger.info("EXITING format_rag_results")
@@ -730,7 +743,7 @@ def generate_answer(state: OverallState):
     
     logger.info("="*50)
     logger.info("ENTERING generate_answer function")
-    logger.info(f"State received: {state}")
+    logger.info(f"State received: {truncate_log_content(state)}")
     
     rag_results = state['RAG_results']
     web_results = state['web_search_results']
@@ -749,10 +762,10 @@ def generate_answer(state: OverallState):
         HumanMessage(content=f"Question: {question}\n\nRAG Results: {rag_results}\n\nWeb Results: {web_results}")
     ]
     answer = structured_llm.invoke(messages)
-    logger.info(f"Generated answer: {answer.answer}")
+    logger.info(f"Generated answer: {truncate_log_content(answer.answer)}")
     
     result = {"answer": answer.answer}
-    logger.info(f"EXITING generate_answer with result: {result}")
+    logger.info(f"EXITING generate_answer with result: {truncate_log_content(result)}")
     logger.info("="*50)
     
     return result
@@ -845,10 +858,10 @@ final_state = graph.invoke({"question": question})
 
 logger.info("="*60)
 logger.info("GRAPH EXECUTION COMPLETED")
-logger.info(f"Final state: {final_state}")
+logger.info(f"Final state: {truncate_log_content(final_state)}")
 logger.info("="*60)
 
-logger.info(f"\nFINAL ANSWER: {final_state['answer']}")
+logger.info(f"\nFINAL ANSWER: {truncate_log_content(final_state['answer'])}")
 print("\n" + "="*60)
 print(f"ANSWER: {final_state['answer']}")
 print("="*60)
